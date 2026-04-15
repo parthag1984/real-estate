@@ -216,17 +216,19 @@
     /* Scale the YouTube iframe to always cover the viewport (16:9 → letterbox fix) */
     #yt-player {
       position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    #yt-player iframe {
+      position: absolute;
       top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      /* Force 16:9 aspect ratio larger than viewport so it always covers */
       width: 177.78vh;   /* 100vh × (16/9) */
       height: 56.25vw;   /* 100vw × (9/16) */
       min-width: 100%;
       min-height: 100%;
-    }
-    #yt-player iframe {
-      width: 100%;
-      height: 100%;
+      transform: translate(-50%, -50%);
       border: none;
       pointer-events: none;
     }
@@ -1320,7 +1322,7 @@
 
   <!-- YouTube Video Background -->
   <div class="hero-video-wrap">
-    <div id="yt-player"></div>
+    <div id="yt-player" style="width:100%;height:100%;"></div>
   </div>
   <div class="hero-video-overlay"></div>
 
@@ -2558,12 +2560,6 @@
     //   3. You'll instantly receive push alerts for every enquiry — just like SMS!
     ntfy_topic: 'partha-leads', // unique topic — change to any private name
 
-    // ── Fast2SMS — Real SMS delivery (https://www.fast2sms.com) ────────
-    // 1. Sign up at fast2sms.com and get your Auth Key from the dashboard.
-    // 2. Paste your Auth Key below.
-    // ⚠️  Note: Browser CORS restrictions may block direct API calls.
-    //    For production, route this through a backend proxy/serverless function.
-    fast2sms_auth_key: 'oAVZqQjpeJNHvYrD69hy1mnK58Ii4cF73L2wRudWtMksxC0flUq5z9cNy1iZ0FUHYQCJvngIuhfLPKax', // ← Replace with your Fast2SMS Auth Key
   };
 
   // Initialise EmailJS
@@ -2608,81 +2604,42 @@
   }
 
   // ════════════════════════════════════════════════════════════════════
-  //  SMS ALERTS — Fast2SMS (https://www.fast2sms.com)
-  //  Set CONFIG.fast2sms_auth_key with your Auth Key from fast2sms.com
-  //  ⚠️  Browser CORS note: Fast2SMS blocks direct browser requests.
-  //      For production, proxy through a backend / serverless function.
-  //      For testing/local use, a CORS browser extension may help.
+  //  FREE PUSH ALERTS — ntfy.sh (https://ntfy.sh)
+  //  No signup · No API key · No DLT registration · 100% free
+  //  Install the "ntfy" app → subscribe to your topic → get instant alerts
   // ════════════════════════════════════════════════════════════════════
 
-  /**
-   * Send an SMS via Fast2SMS Quick SMS (route: q).
-   * @param {string|string[]} numbers  - 10-digit Indian number(s), e.g. '9876543210'
-   * @param {string}          message  - Plain text message (max ~160 chars recommended)
-   * @returns {Promise<boolean>}
-   */
-  async function _sendViaFast2SMS(numbers, message) {
-    const authKey = CONFIG.fast2sms_auth_key;
-    if (!authKey || authKey === 'YOUR_FAST2SMS_AUTH_KEY') {
-      console.warn('[Fast2SMS] Auth key not configured. Add your key to CONFIG.fast2sms_auth_key');
-      return false;
-    }
-
-    // Accept array or single number; strip spaces/dashes/+91 prefix
-    const nums = (Array.isArray(numbers) ? numbers : [numbers])
-      .map(n => String(n).replace(/[\s\-]/g, '').replace(/^\+?91/, ''))
-      .filter(n => /^\d{10}$/.test(n));
-
-    if (nums.length === 0) {
-      console.warn('[Fast2SMS] No valid 10-digit numbers provided.');
-      return false;
-    }
-
-    const payload = {
-      route:    'q',
-      message:  message,
-      language: 'english',
-      numbers:  nums.join(','),
-    };
-
+  // ── Push notification via ntfy.sh ────────────────────────────────
+  async function _sendViaNtfy(message) {
+    if (!CONFIG.ntfy_topic) return false;
     try {
-      const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-        method:  'POST',
+      const res = await fetch('https://ntfy.sh/' + CONFIG.ntfy_topic, {
+        method: 'POST',
         headers: {
-          'authorization': authKey,
-          'Content-Type':  'application/json',
+          'Content-Type': 'text/plain',
+          'Title':        'P N ENTERPRISE - New Lead!',
+          'Priority':     'high',
+          'Tags':         'house,bell',
         },
-        body: JSON.stringify(payload),
+        body: message,
       });
-      const data = await res.json();
-      if (data.return === true) {
-        console.log('[Fast2SMS] ✓ SMS sent to', nums.join(', '), '| Request ID:', data.request_id);
-        return true;
-      } else {
-        console.warn('[Fast2SMS] ✗ Failed:', data.message || JSON.stringify(data));
-        return false;
-      }
+      console.log('[ntfy.sh]', res.status, res.ok ? '✓ sent' : '✗ failed');
+      return res.ok;
     } catch (err) {
-      console.error('[Fast2SMS] Error:', err.message || err);
-      // CORS error is common in browser — silently fail so UX is unaffected
+      console.error('[ntfy.sh] error:', err);
       return false;
     }
   }
 
-  // ── Send SMS alert to the owner about a new lead ─────────────────
+  // ── Send push alert to the owner about a new lead ─────────────────
   async function sendSMSToOwner(message) {
-    const ownerPhone = CONFIG.owner_phone;
-    if (!ownerPhone) return false;
-    return await _sendViaFast2SMS(ownerPhone, message);
+    return await _sendViaNtfy(message);
   }
 
-  // ── Send SMS confirmation to a customer ──────────────────────────
+  // ── Send SMS confirmation to a customer (no-op — ntfy is owner-only) ──
   async function sendSMSToCustomer(customerPhone, customerName, type) {
-    if (!customerPhone) return false;
-    const msg = type === 'enquiry'
-      ? `Dear ${customerName}, your property enquiry has been received by P N ENTERPRISE. Our sales team will contact you within 24 hrs. Call: ${CONFIG.owner_phone}`
-      : `Dear ${customerName}, thank you for contacting P N ENTERPRISE. We've received your message and will get back to you within 24 business hrs. Call: ${CONFIG.owner_phone}`;
-    return await _sendViaFast2SMS(customerPhone, msg);
+    // ntfy.sh sends push to owner's phone only; customer confirmation is via email
+    return false;
   }
 
   // ── Trigger email + SMS for Enquiry ─────────────────────────
@@ -2905,6 +2862,8 @@ P N ENTERPRISE Pvt. Ltd.
   // Called automatically by YouTube API when ready
   function onYouTubeIframeAPIReady() {
     _ytPlayer = new YT.Player('yt-player', {
+      width:   '100%',
+      height:  '100%',
       videoId: YT_PLAYLIST[0],
       playerVars: {
         autoplay:       1,
@@ -2917,23 +2876,28 @@ P N ENTERPRISE Pvt. Ltd.
         modestbranding: 1,
         disablekb:      1,
         fs:             0,
+        playsinline:    1,
         playlist:       YT_PLAYLIST.join(','),
       },
       events: {
         onReady: function(e) {
           e.target.mute();
           e.target.playVideo();
-          e.target.setPlaybackQuality('hd1080');
+          // Style the iframe element created by the API
+          const iframe = document.querySelector('#yt-player iframe');
+          if (iframe) {
+            iframe.style.cssText = 'position:absolute;top:50%;left:50%;width:177.78vh;height:56.25vw;min-width:100%;min-height:100%;transform:translate(-50%,-50%);border:none;pointer-events:none;';
+          }
         },
         onStateChange: function(e) {
-          // Auto-restart when ended (belt-and-suspenders alongside loop param)
           if (e.data === YT.PlayerState.ENDED) {
             e.target.playVideo();
           }
         },
         onError: function() {
-          // If video errors, hide video wrap — CSS gradient fallback shows through
-          document.querySelector('.hero-video-wrap').style.display = 'none';
+          // Hide video wrap on error — CSS gradient fallback shows through
+          const wrap = document.querySelector('.hero-video-wrap');
+          if (wrap) wrap.style.display = 'none';
         }
       }
     });
