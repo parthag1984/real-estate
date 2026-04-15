@@ -2623,7 +2623,6 @@
    */
   async function _sendViaFast2SMS(numbers, message) {
     const authKey = CONFIG.fast2sms_auth_key;
-    alert("authKey"+authKey);
     if (!authKey || authKey === 'YOUR_FAST2SMS_AUTH_KEY') {
       console.warn('[Fast2SMS] Auth key not configured. Add your key to CONFIG.fast2sms_auth_key');
       return false;
@@ -2647,7 +2646,6 @@
     };
 
     try {
-    alert("start post");
       const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
         method:  'POST',
         headers: {
@@ -2657,7 +2655,6 @@
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      alert("data.return"+data.return);
       if (data.return === true) {
         console.log('[Fast2SMS] ✓ SMS sent to', nums.join(', '), '| Request ID:', data.request_id);
         return true;
@@ -2666,7 +2663,6 @@
         return false;
       }
     } catch (err) {
-    alert("err"+err);
       console.error('[Fast2SMS] Error:', err.message || err);
       // CORS error is common in browser — silently fail so UX is unaffected
       return false;
@@ -2675,7 +2671,6 @@
 
   // ── Send SMS alert to the owner about a new lead ─────────────────
   async function sendSMSToOwner(message) {
-  alert("message"+message);
     const ownerPhone = CONFIG.owner_phone;
     if (!ownerPhone) return false;
     return await _sendViaFast2SMS(ownerPhone, message);
